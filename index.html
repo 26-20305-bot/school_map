@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
+<title>여의도여고 3D 실내지도</title>
+<style>
+:root{--g:#03C75A;--gd:#02a94c;--gl:#e8f8ef;--bg:#EBEFEF;--line:#e3e8ea;--text:#232b2f;--sub:#7b878d;--red:#ff3b4e}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;height:100%;overflow:hidden}
+body{font-family:Pretendard,'Noto Sans KR','Apple SD Gothic Neo','Malgun Gothic',Arial,sans-serif;color:var(--text);background:var(--bg)}
+button,select,input{font:inherit;color:inherit}
+.app{position:fixed;inset:0}
+.map{position:absolute;inset:0;overflow:hidden;background:var(--bg);cursor:grab;touch-action:none;user-select:none;-webkit-user-select:none}
+.map.drag{cursor:grabbing}
+
+.panel{position:absolute;top:16px;left:16px;width:360px;max-height:calc(100% - 32px);background:#fff;border-radius:14px;box-shadow:0 4px 22px rgba(0,0,0,.18);z-index:20;display:flex;flex-direction:column;overflow:hidden}
+.panel-head{display:flex;align-items:center;gap:10px;padding:16px 18px 10px}
+.brand-ico{width:34px;height:34px;border-radius:10px;background:var(--g);display:grid;place-items:center;flex:none}
+.brand-ico svg{width:20px;height:20px}
+.brand b{display:block;font-size:17px;letter-spacing:-.3px;color:var(--gd)}
+.brand span{font-size:12px;color:var(--sub)}
+.panel-body{overflow:auto;padding:0 18px 16px}
+.routebox{border:1px solid var(--line);border-radius:12px;padding:10px 12px;position:relative}
+.row{display:flex;align-items:center;gap:10px;padding:5px 0}
+.row+.row{border-top:1px dashed var(--line)}
+.dot{width:14px;height:14px;border-radius:50%;flex:none;border:3px solid;background:#fff}
+.dot.s{border-color:var(--g)}.dot.e{border-color:var(--red)}
+.row select{flex:1;min-width:0;border:0;background:transparent;padding:8px 4px;font-size:14px;font-weight:600;outline:none;cursor:pointer;text-overflow:ellipsis}
+.opts{display:flex;align-items:center;gap:8px;margin:10px 2px 0;font-size:12px;color:var(--sub)}
+.opts select{flex:1;border:1px solid var(--line);border-radius:8px;padding:7px 8px;font-size:13px;background:#fff;color:var(--text)}
+.go{width:100%;margin-top:10px;padding:13px;border:0;border-radius:10px;background:var(--g);color:#fff;font-weight:800;font-size:15px;cursor:pointer;box-shadow:0 2px 8px rgba(3,199,90,.35)}
+.go:hover{background:var(--gd)}
+.result{display:none;margin-top:12px;border-radius:12px;background:#f3fbf6;border:1px solid #d3f0df;padding:14px}
+.result.active{display:block}
+.sum{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+.sum .min{font-size:26px;font-weight:850;color:var(--red);letter-spacing:-.5px}
+
+.badge{position:absolute;right:16px;top:16px;background:#fff;padding:9px 13px;border-radius:10px;box-shadow:0 2px 10px rgba(0,0,0,.15);font-size:12px;font-weight:700;color:#4a565c;z-index:10}
+.badge b{color:var(--g)}
+.floors{position:absolute;right:16px;top:64px;display:flex;flex-direction:column;background:#fff;border-radius:12px;box-shadow:0 2px 10px rgba(0,0,0,.18);overflow:hidden;z-index:10}
+.floors button{position:relative;width:46px;height:42px;border:0;background:#fff;font-weight:800;font-size:14px;color:#56636a;cursor:pointer;border-top:1px solid var(--line)}
+.floors button:first-child{border-top:0}
+.floors button.on{background:var(--g);color:#fff}
+.tools{position:absolute;right:16px;bottom:22px;display:grid;gap:8px;z-index:10}
+.tools button{width:44px;height:44px;border:0;border-radius:12px;background:#fff;box-shadow:0 2px 10px rgba(0,0,0,.2);font-size:16px;font-weight:800;cursor:pointer;line-height:1}
+
+#mapViewport{width:100%;height:100%;display:flex;align-items:center;justify-content:center;perspective:1000px}
+#mapStage{width:800px;height:600px;position:relative;transform-style:preserve-3d;transition:transform .3s ease}
+.floor-layer{position:absolute;inset:0;background:#fff;border:2px solid #3c4a50;border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,.15);transition:transform .4s ease,opacity .4s ease}
+.rt-path{fill:none;stroke:var(--red);stroke-width:6;stroke-dasharray:10 6;animation:flow .8s linear infinite}
+@keyframes flow{to{stroke-dashoffset:-16}}
+
+@media(max-width:760px){
+ .panel{left:0;right:0;top:auto;bottom:0;width:auto;max-height:52vh;border-radius:18px 18px 0 0}
+ .badge{display:none}
+ .floors{top:12px}
+}
+</style>
+</head>
+<body>
+<div class="app">
+ <main class="map" id="mapContainer">
+  <div id="mapViewport">
+   <div id="mapStage">
+    <div class="floor-layer" id="layerF2" style="transform:translateZ(100px)">
+     <svg viewBox="0 0 800 600" width="100%" height="100%">
+      <rect x="100" y="100" width="600" height="400" fill="#f8fafc" stroke="#cbd5e1" stroke-width="2"/>
+      <rect x="150" y="150" width="180" height="120" fill="#e2e8f0" rx="8"/>
+      <text x="240" y="210" font-weight="bold" text-anchor="middle">2학년 1반</text>
+      <rect x="470" y="150" width="180" height="120" fill="#e2e8f0" rx="8"/>
+      <text x="560" y="210" font-weight="bold" text-anchor="middle">도서관</text>
+      <circle cx="400" cy="300" r="20" fill="#ff9800"/>
+      <text x="400" y="305" fill="#fff" font-weight="bold" text-anchor="middle">계단</text>
+      <path id="pathF2" class="rt-path" d=""/>
+     </svg>
+    </div>
+    <div class="floor-layer" id="layerF1" style="transform:translateZ(0)">
+     <svg viewBox="0 0 800 600" width="100%" height="100%">
+      <rect x="100" y="100" width="600" height="400" fill="#f1f5f9" stroke="#94a3b8" stroke-width="2"/>
+      <rect x="150" y="150" width="180" height="120" fill="#cbd5e1" rx="8"/>
+      <text x="240" y="210" font-weight="bold" text-anchor="middle">행정실</text>
+      <rect x="470" y="150" width="180" height="120" fill="#cbd5e1" rx="8"/>
+      <text x="560" y="210" font-weight="bold" text-anchor="middle">교무실</text>
+      <circle cx="400" cy="300" r="20" fill="#ff9800"/>
+      <text x="400" y="305" fill="#fff" font-weight="bold" text-anchor="middle">계단</text>
+      <path id="pathF1" class="rt-path" d=""/>
+     </svg>
+    </div>
+   </div>
+  </div>
+
+  <div class="badge"><b>여의도여고</b> 실내지도 · <span id="curFloorTxt">1층</span></div>
+  <div class="floors">
+   <button id="btnF2" onclick="setFloor(2)">2F</button>
+   <button id="btnF1" class="on" onclick="setFloor(1)">1F</button>
+  </div>
+  <div class="tools">
+   <button id="btn3D" onclick="toggle3D()">3D</button>
+  </div>
+ </main>
+
+ <aside class="panel" id="panel">
+  <div class="panel-head">
+   <div class="brand-ico">
+    <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s-7-6.2-7-11.5A7 7 0 0 1 19 9.5C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/></svg>
+   </div>
+   <div class="brand"><b>여의도여고 캠퍼스맵</b><span>3D 층별 실내지도 · 계단 길찾기</span></div>
+  </div>
+  <div class="panel-body">
+   <div class="routebox">
+    <div class="row"><span class="dot s"></span>
+     <select id="startSelect">
+      <option value="0">1층 행정실</option>
+      <option value="1">1층 교무실</option>
+      <option value="2">1층 계단</option>
+      <option value="3">2층 계단</option>
+      <option value="4">2학년 1반</option>
+      <option value="5">2층 도서관</option>
+     </select>
+    </div>
+    <div class="row"><span class="dot e"></span>
+     <select id="endSelect">
+      <option value="5" selected>2층 도서관</option>
+      <option value="4">2학년 1반</option>
+      <option value="3">2층 계단</option>
+      <option value="2">1층 계단</option>
+      <option value="1">1층 교무실</option>
+      <option value="0">1층 행정실</option>
+     </select>
+    </div>
+   </div>
+   <div class="opts"><span>이동 수단</span>
+    <select id="mode">
+     <option value="any">최단 시간 (계단+엘레베이터)</option>
+     <option value="stairs">계단만 이용</option>
+     <option value="elev">엘레베이터만 이용</option>
+    </select>
+   </div>
+   <button class="go" id="searchBtn">⌁ 최단 경로 탐색</button>
+   <div class="result" id="resultBox">
+    <div class="sum">
+     <div>예상 소요 시간:</div>
+     <div class="min" id="timeTxt">0초</div>
+    </div>
+    <div id="routeSteps" style="margin-top:8px;font-size:13px;line-height:1.5"></div>
+   </div>
+  </div>
+ </aside>
+</div>
+
+<script>
+const NODES = [
+  { id: 0, name: "1층 행정실", f: 1, x: 240, y: 210, poi: 0 },
+  { id: 1, name: "1층 교무실", f: 1, x: 560, y: 210, poi: 1 },
+  { id: 2, name: "1층 계단",   f: 1, x: 400, y: 300, poi: 2 },
+  { id: 3, name: "2층 계단",   f: 2, x: 400, y: 300, poi: 3 },
+  { id: 4, name: "2학년 1반",  f: 2, x: 240, y: 210, poi: 4 },
+  { id: 5, name: "2층 도서관", f: 2, x: 560, y: 210, poi: 5 }
+];
+
+const POIS = [
+  { cat: 'office' }, { cat: 'office' }, { cat: 'conn' }, 
+  { cat: 'conn' },   { cat: 'room' },   { cat: 'room' }
+];
+
+const ADJ = [
+  [{ to: 2, w: 15, kind: 'walk' }],
+  [{ to: 2, w: 12, kind: 'walk' }],
+  [{ to: 0, w: 15, kind: 'walk' }, { to: 1, w: 12, kind: 'walk' }, { to: 3, w: 20, kind: 'stair' }],
+  [{ to: 2, w: 20, kind: 'stair' }, { to: 4, w: 15, kind: 'walk' }, { to: 5, w: 12, kind: 'walk' }],
+  [{ to: 3, w: 15, kind: 'walk' }],
+  [{ to: 3, w: 12, kind: 'walk' }]
+];
+
+function dijkstra(s, t, mode) {
+  const n = NODES.length;
+  const dist = new Array(n).fill(Infinity);
+  const prev = new Array(n).fill(-1);
+  const done = new Array(n).fill(false);
+  
+  dist[s] = 0;
+  const heap = [[0, s]];
+  
+  const hpush = x => {
+    let i = heap.push(x) - 1;
+    while (i > 0) {
+      const p = (i - 1) >> 1;
+      if (heap[p][0] <= heap[i][0]) break;
+      [heap[p], heap[i]] = [heap[i], heap[p]];
+      i = p;
+    }
+  };
+
+  const hpop = () => {
+    const top = heap[0], last = heap.pop();
+    if (heap.length) {
+      heap[0] = last;
+      let i = 0;
+      for (;;) {
+        const l = 2 * i + 1, r = l + 1;
+        let m = i;
+        if (l < heap.length && heap[l][0] < heap[m][0]) m = l;
+        if (r < heap.length && heap[r][0] < heap[m][0]) m = r;
+        if (m === i) break;
+        [heap[m], heap[i]] = [heap[i], heap[m]];
+        i = m;
+      }
+    }
+    return top;
+  };
+
+  while (heap.length) {
+    const u = hpop()[1];
+    if (done[u]) continue;
+    if (u === t) break;
+    done[u] = true;
+
+    for (const e of ADJ[u]) {
+      if (mode === 'stairs' && e.kind === 'elev') continue;
+      if (mode === 'elev' && e.kind === 'stair') continue;
+      
+      const nd = NODES[e.to];
+      if (nd.poi !== undefined && e.to !== t && POIS[nd.poi].cat !== 'conn') continue;
+      
+      const alt = dist[u] + e.w;
+      if (alt < dist[e.to]) {
+        dist[e.to] = alt;
+        prev[e.to] = u;
+        hpush([alt, e.to]);
+      }
+    }
+  }
+
+  if (dist[t] === Infinity) return null;
+
+  const path = [t];
+  let u = t;
+  while (u !== s) {
+    u = prev[u];
+    path.unshift(u);
+  }
+  return { path, sec: dist[t] };
+}
+
+let is3D = false;
+let currentFloor = 1;
+
+function toggle3D() {
+  is3D = !is3D;
+  const stage = document.getElementById('mapStage');
+  const btn = document.getElementById('btn3D');
+  
+  if (is3D) {
+    stage.style.transform = 'rotateX(55deg) rotateZ(-25deg)';
+    btn.innerText = '2D';
+    document.getElementById('layerF2').style.transform = 'translateZ(120px)';
+  } else {
+    stage.style.transform = 'rotateX(0deg) rotateZ(0deg)';
+    btn.innerText = '3D';
+    setFloor(currentFloor);
+  }
+}
+
+function setFloor(floor) {
+  currentFloor = floor;
+  document.getElementById('curFloorTxt').innerText = `${floor}층`;
+  document.getElementById('btnF1').classList.toggle('on', floor === 1);
+  document.getElementById('btnF2').classList.toggle('on', floor === 2);
+
+  if (!is3D) {
+    document.getElementById('layerF1').style.opacity = floor === 1 ? '1' : '0.2';
+    document.getElementById('layerF2').style.opacity = floor === 2 ? '1' : '0.2';
+  }
+}
+
+document.getElementById('searchBtn').addEventListener('click', () => {
+  const startId = parseInt(document.getElementById('startSelect').value);
+  const endId = parseInt(document.getElementById('endSelect').value);
+  const mode = document.getElementById('mode').value;
+
+  const result = dijkstra(startId, endId, mode);
+  
+  if (!result) {
+    alert('이동 경로를 찾을 수 없습니다.');
+    return;
+  }
+
+  document.getElementById('resultBox').classList.add('active');
+  document.getElementById('timeTxt').innerText = `${result.sec}초`;
+  
+  const stepNames = result.path.map(id => NODES[id].name);
+  document.getElementById('routeSteps').innerHTML = '<b>경로:</b> ' + stepNames.join(' ➔ ');
+
+  drawPathOnSVG(result.path);
+});
+
+function drawPathOnSVG(pathNodes) {
+  let pathF1 = "";
+  let pathF2 = "";
+
+  for (let i = 0; i < pathNodes.length - 1; i++) {
+    const u = NODES[pathNodes[i]];
+    const v = NODES[pathNodes[i+1]];
+
+    if (u.f === 1 && v.f === 1) {
+      pathF1 += `M ${u.x} ${u.y} L ${v.x} ${v.y} `;
+    } else if (u.f === 2 && v.f === 2) {
+      pathF2 += `M ${u.x} ${u.y} L ${v.x} ${v.y} `;
+    }
+  }
+
+  document.getElementById('pathF1').setAttribute('d', pathF1);
+  document.getElementById('pathF2').setAttribute('d', pathF2);
+}
+</script>
+</body>
+</html>
